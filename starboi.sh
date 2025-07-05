@@ -5,15 +5,15 @@ API_KEY=$GEMINI_API_KEY
 URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$API_KEY"
 
 
-# 1. Show logo
+#Show logo
 echo -e "\e[38;2;0;200;255m★ startboi ★\e[0m"
 
-# 2. Intro message
+#Intro message
 echo "Hi! I'm Starboi :)."
 echo "What do you want to do today?"
 echo "Type 'exit' to say bye!."
 
-# 3. Infinite loop
+#Infinite loop
 while true; do
     # Prompt user input
     read -p "You: " user_input
@@ -61,7 +61,7 @@ while true; do
     wait $spinner_pid 2>/dev/null
     printf "\r"           
     tput el 
-    
+
     # Handle API errors gracefully
     error_msg=$(echo "$response" | jq -r '.error.message // empty')
     if [[ -n "$error_msg" ]]; then
