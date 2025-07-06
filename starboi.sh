@@ -1,5 +1,20 @@
 #!/bin/bash
-source .env
+
+# Check for jq dependency
+if ! command -v jq >/dev/null 2>&1; then
+    echo "Error: jq is not installed. Please install jq to use this script." >&2
+    exit 1
+fi
+
+# Source .env from current directory or home directory
+if [ -f .env ]; then
+    source .env
+elif [ -f "$HOME/.starboi.env" ]; then
+    source "$HOME/.starboi.env"
+else
+    echo "Error: .env file with GEMINI_API_KEY not found." >&2
+    exit 1
+fi
 
 API_KEY=$GEMINI_API_KEY
 URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$API_KEY"
