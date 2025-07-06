@@ -92,4 +92,4 @@ MIT License
 
 ---
 
-Made with ❤️ by Jeevan
+Made with ❤️ by EvoG1
