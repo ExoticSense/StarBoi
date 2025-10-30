@@ -8,9 +8,9 @@ fi
 
 # Multiple Gemini API Keys
 GEMINI_API_KEYS=(
-    "AIzaSyDINe41S5P6HRiwkz-xQczWs6MCGBhjDFk"
-    "AIzaSyBYxWEROm5u2SXQn3WjL2rVHZM1qtdBLt4"
-    "AIzaSyBXGAIyWToJtB34NL2Ls0b63e0Q6zqkrqg"
+    "AIzaSyCR1gWqf-kwM74jj9-RKuqtQbQ_SYfkCag"
+    "AIzaSyDLmzPy5AbpXQz2UnB1aMu7e5rY8V4evUM"
+    "AIzaSyC4_Se9jduGynInvNVWUWMnfHU9KvRQSeI"
 )
 
 # Function to get URL for a given API key
