@@ -8,9 +8,9 @@ fi
 
 # Multiple Gemini API Keys
 GEMINI_API_KEYS=(
-    "AIzaSyCR1gWqf-kwM74jj9-RKuqtQbQ_SYfkCag"
-    "AIzaSyDLmzPy5AbpXQz2UnB1aMu7e5rY8V4evUM"
-    "AIzaSyC4_Se9jduGynInvNVWUWMnfHU9KvRQSeI"
+    "AIzaSyDpBroKhgfQeO4W9VO9myFjBmu2j0Ph8e8"
+    "AIzaSyAl70_DjIVt9cV-V7vuRv7Y448YQxRXj_g"
+    "AIzaSyDF3Lmmmsw7rGvu8-CW_uGyf9_Vo6qTako"
 )
 
 # Function to get URL for a given API key
@@ -18,6 +18,68 @@ get_url() {
     echo "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$1"
 }
 
+# Debug and key cooldown settings
+DEBUG=false
+KEY_COOLDOWN_SECONDS=60
+declare -A KEY_DISABLED
+
+# call_api(payload)
+# Tries each API key (skips recently-disabled keys), checks HTTP status and API error,
+# verifies expected response field exists, and returns the first valid JSON response.
+call_api() {
+    local payload="$1"
+    local tmp resp http_code api_key URL error_msg now disabled_until
+    now=$(date +%s)
+
+    for api_key in "${GEMINI_API_KEYS[@]}"; do
+        disabled_until=${KEY_DISABLED["$api_key"]:-0}
+        if (( now < disabled_until )); then
+            $DEBUG && echo "DEBUG: skipping key $api_key (cooldown until $disabled_until)" >&2
+            continue
+        fi
+
+        URL=$(get_url "$api_key")
+        tmp=$(mktemp) || return 1
+        http_code=$(curl -s -o "$tmp" -w "%{http_code}" -X POST "$URL" \
+            -H "Content-Type: application/json" \
+            -d "$payload")
+        resp=$(cat "$tmp"); rm -f "$tmp"
+
+        # Debug output
+        $DEBUG && echo "DEBUG: tried key=$api_key http=$http_code resp_len=$(echo -n "$resp" | wc -c)" >&2
+
+        # Non-200 -> treat as failure; disable on auth/quota codes
+        if [[ "$http_code" -ne 200 ]]; then
+            if [[ "$http_code" -eq 401 || "$http_code" -eq 403 || "$http_code" -eq 429 ]]; then
+                KEY_DISABLED["$api_key"]=$((now + KEY_COOLDOWN_SECONDS))
+                $DEBUG && echo "DEBUG: disabling key $api_key until ${KEY_DISABLED[$api_key]}" >&2
+            fi
+            continue
+        fi
+
+        # API-level error message
+        error_msg=$(echo "$resp" | jq -r '.error.message // empty' 2>/dev/null)
+        if [[ -n "$error_msg" ]]; then
+            $DEBUG && echo "DEBUG: key $api_key returned API error: $error_msg" >&2
+            if echo "$error_msg" | grep -Ei 'quota|rate limit|permission|not authorized|authentication' >/dev/null 2>&1; then
+                KEY_DISABLED["$api_key"]=$((now + KEY_COOLDOWN_SECONDS))
+                $DEBUG && echo "DEBUG: disabling key $api_key until ${KEY_DISABLED[$api_key]} due to API error" >&2
+            fi
+            continue
+        fi
+
+        # Ensure expected candidate text exists
+        if echo "$resp" | jq -e '.candidates[0].content.parts[0].text' >/dev/null 2>&1; then
+            printf '%s' "$resp"
+            return 0
+        fi
+
+        # If response doesn't contain expected field, try next key
+        sleep 0.2
+    done
+
+    return 1
+}
 
 #Show logo
 echo -e "\e[38;2;0;200;255m★ startboi ★\e[0m"
@@ -123,17 +185,12 @@ if [[ "$MODE" == "db" ]]; then
 
         payload=$(jq -n --arg text "$prompt" '{contents:[{parts:[{text:$text}]}]}')
         api_success=false
-        for api_key in "${GEMINI_API_KEYS[@]}"; do
-            URL=$(get_url "$api_key")
-            response=$(curl -s -X POST "$URL" \
-                -H "Content-Type: application/json" \
-                -d "$payload")
-            error_msg=$(echo "$response" | jq -r '.error.message // empty')
-            if [[ -z "$error_msg" ]]; then
-                api_success=true
-                break
-            fi
-        done
+
+        if response=$(call_api "$payload"); then
+            api_success=true
+        else
+            api_success=false
+        fi
 
         kill $spinner_pid >/dev/null 2>&1
         wait $spinner_pid 2>/dev/null
@@ -183,17 +240,13 @@ while true; do
     # Make API call and capture response
     payload=$(jq -n --arg text "$user_input" '{contents:[{parts:[{text:$text}]}]}')
     api_success=false
-    for api_key in "${GEMINI_API_KEYS[@]}"; do
-        URL=$(get_url "$api_key")
-        response=$(curl -s -X POST "$URL" \
-            -H "Content-Type: application/json" \
-            -d "$payload")
-        error_msg=$(echo "$response" | jq -r '.error.message // empty')
-        if [[ -z "$error_msg" ]]; then
-            api_success=true
-            break
-        fi
-    done
+
+    if response=$(call_api "$payload"); then
+        api_success=true
+    else
+        api_success=false
+    fi
+
     kill $spinner_pid >/dev/null 2>&1
     wait $spinner_pid 2>/dev/null
     printf "\r"           
